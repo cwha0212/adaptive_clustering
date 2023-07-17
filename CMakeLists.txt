@@ -13,8 +13,13 @@ generate_messages(DEPENDENCIES std_msgs sensor_msgs)
 
 catkin_package()
 
-add_executable(adaptive_clustering src/adaptive_clustering.cpp)
-target_link_libraries(adaptive_clustering ${catkin_LIBRARIES})
+add_executable(adaptive_clustering_legal src/adaptive_clustering_legal.cpp)
+add_executable(adaptive_clustering_illegal src/adaptive_clustering_illegal.cpp)
+
+target_link_libraries(adaptive_clustering_legal ${catkin_LIBRARIES})
+target_link_libraries(adaptive_clustering_illegal ${catkin_LIBRARIES})
+
 if(catkin_EXPORTED_TARGETS)
-  add_dependencies(adaptive_clustering ${catkin_EXPORTED_TARGETS})
+  add_dependencies(adaptive_clustering_legal ${catkin_EXPORTED_TARGETS})
+  add_dependencies(adaptive_clustering_illegal ${catkin_EXPORTED_TARGETS})
 endif()

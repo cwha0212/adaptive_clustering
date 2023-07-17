@@ -23,6 +23,7 @@
 // PCL
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/passthrough.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/common/common.h>
 #include <pcl/common/centroid.h>
@@ -35,7 +36,6 @@ ros::Publisher pose_array_pub_;
 ros::Publisher marker_array_pub_;
 
 bool print_fps_;
-int leaf_;
 float z_axis_min_;
 float z_axis_max_;
 int cluster_size_min_;
@@ -52,15 +52,13 @@ void pointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& ros_pc2_in) {
   pcl::PointCloud<pcl::PointXYZI>::Ptr pcl_pc_in(new pcl::PointCloud<pcl::PointXYZI>);
   pcl::fromROSMsg(*ros_pc2_in, *pcl_pc_in);
   
-  /*** Downsampling + ground & ceiling removal ***/
+  /*** Remove ground and ceiling ***/
   pcl::IndicesPtr pc_indices(new std::vector<int>);
-  for(int i = 0; i < pcl_pc_in->size(); ++i) {
-    if(i % leaf_ == 0) {
-      if(pcl_pc_in->points[i].z >= z_axis_min_ && pcl_pc_in->points[i].z <= z_axis_max_) {
-	pc_indices->push_back(i);
-      }
-    }
-  }
+  pcl::PassThrough<pcl::PointXYZI> pt;
+  pt.setInputCloud(pcl_pc_in);
+  pt.setFilterFieldName("z");
+  pt.setFilterLimits(z_axis_min_, z_axis_max_);
+  pt.filter(*pc_indices);
   
   /*** Divide the point cloud into nested circular regions ***/
   boost::array<std::vector<int>, region_max_> indices_array;
@@ -164,6 +162,7 @@ void pointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& ros_pc2_in) {
       
       visualization_msgs::Marker marker;
       marker.header = ros_pc2_in->header;
+      marker.header.frame_id = "map";
       marker.ns = "adaptive_clustering";
       marker.id = i;
       marker.type = visualization_msgs::Marker::LINE_LIST;
@@ -197,11 +196,11 @@ void pointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& ros_pc2_in) {
   	marker.points.push_back(p[i]);
       }
       
-      marker.scale.x = 0.02;
+      marker.scale.x = 0.06;
       marker.color.a = 1.0;
-      marker.color.r = 0.0;
-      marker.color.g = 1.0;
-      marker.color.b = 0.5;
+      marker.color.r = 1.0;
+      marker.color.g = 0.0;
+      marker.color.b = 0.0;
       marker.lifetime = ros::Duration(0.1);
       marker_array.markers.push_back(marker);
     }
@@ -229,21 +228,20 @@ int main(int argc, char **argv) {
   
   /*** Subscribers ***/
   ros::NodeHandle nh;
-  ros::Subscriber point_cloud_sub = nh.subscribe<sensor_msgs::PointCloud2>("velodyne_points", 1, pointCloudCallback);
+  ros::Subscriber point_cloud_sub = nh.subscribe<sensor_msgs::PointCloud2>("/illegal", 1, pointCloudCallback);
 
   /*** Publishers ***/
   ros::NodeHandle private_nh("~");
   cluster_array_pub_ = private_nh.advertise<adaptive_clustering::ClusterArray>("clusters", 100);
   cloud_filtered_pub_ = private_nh.advertise<sensor_msgs::PointCloud2>("cloud_filtered", 100);
   pose_array_pub_ = private_nh.advertise<geometry_msgs::PoseArray>("poses", 100);
-  marker_array_pub_ = private_nh.advertise<visualization_msgs::MarkerArray>("markers", 100);
+  marker_array_pub_ = private_nh.advertise<visualization_msgs::MarkerArray>("illegal_kickboard", 100);
   
   /*** Parameters ***/
   std::string sensor_model;
   
   private_nh.param<std::string>("sensor_model", sensor_model, "VLP-16"); // VLP-16, HDL-32E, HDL-64E
   private_nh.param<bool>("print_fps", print_fps_, false);
-  private_nh.param<int>("leaf", leaf_, 1);
   private_nh.param<float>("z_axis_min", z_axis_min_, -0.8);
   private_nh.param<float>("z_axis_max", z_axis_max_, 2.0);
   private_nh.param<int>("cluster_size_min", cluster_size_min_, 3);
